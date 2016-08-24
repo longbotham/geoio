@@ -20,7 +20,6 @@ import logging
 import math
 import platform
 from collections import Sequence
-from tzwhere import tzwhere
 import tinytools as tt
 
 # package import
@@ -657,6 +656,36 @@ class GeoImage(object):
             else:
                 yield data
 
+    def get_data_from_coords(self, coords, **kwargs):
+        """Method to get pixel data given polygon coordintes in the same projection as
+        the image. kwargs can be anything accepted by get_data.
+
+        Parameters
+        ----------
+        coords : list of lists. polygon coordinates formatted as follows:
+            - lat/long (EPSG:4326) projection: [[lon_1, lat_1], [lon_2, lat_2], ...]
+            - UTM projection: [[x_1, y_1], [x_2, y_2], ...]
+
+        Returns
+        ------
+        ndarray
+            Three dimensional numpy array of data from region of the image specified
+            in the feature geometry.
+        """
+
+        # create ogr geometry ring from feature geom
+        ring = ogr.Geometry(ogr.wkbLinearRing)
+
+        for point in coords:
+            lon, lat = point[0], point[1]
+            ring.AddPoint(lon, lat)
+
+        ring.AddPoint(coords[0][0], coords[0][1]) # close geom ring with first point
+        geom = ogr.Geometry(ogr.wkbPolygon)
+        geom.AddGeometry(ring)
+
+        return self.get_data(geom=geom, **kwargs)
+
 
     def get_data_from_vec_extent(self, vector=None, **kwargs):
         """This is a convenience method to find the extent of a vector and
@@ -934,7 +963,7 @@ class GeoImage(object):
         provides several options that define the region of the image from
         which pixels are pulled and how the data is returned to the users.
 
-        The returned numpy array follows the gdal convention usding a
+        The returned numpy array follows the gdal convention using a
         bands-first format (bands, x, y).  If a single band is requested,
         the first dimension will be singular.  Numpy squeeze can be used
         to quickly remove the singular dimension.  The bands-first format
